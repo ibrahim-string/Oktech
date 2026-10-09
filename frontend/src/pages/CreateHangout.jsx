@@ -23,7 +23,7 @@ export function CreateHangout() {
     area: AREAS.includes(user.area) ? user.area : "Osaka",
     place_name: "",
     starts_at: defaultWhen(),
-    languages: [...new Set([...user.speaks, ...user.learning, "ja", "en"])].filter((l) => LANG_OPTIONS.includes(l)).slice(0, 2),
+    languages: ["ja", "en"],
     max_participants: 4,
   });
   const [preview, setPreview] = useState(null);

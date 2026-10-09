@@ -145,6 +145,7 @@ function Chat({ hangoutId, enabled }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState(null);
   const [original, setOriginal] = useState({});
   const lastId = useRef(0);
   const endRef = useRef(null);
@@ -184,11 +185,14 @@ function Chat({ hangoutId, enabled }) {
     const body = draft.trim();
     if (!body) return;
     setSending(true);
+    setSendError(null);
     try {
       const m = await api.sendMessage(hangoutId, body);
       setDraft("");
       setMessages((prev) => [...prev, { ...m, text: m.body, translated: false }]);
       lastId.current = Math.max(lastId.current, m.id);
+    } catch (err) {
+      setSendError(err.message);
     } finally {
       setSending(false);
     }
@@ -235,6 +239,7 @@ function Chat({ hangoutId, enabled }) {
               {t.send}
             </button>
           </form>
+          {sendError && <p className="error">{sendError}</p>}
         </>
       )}
     </section>

@@ -225,3 +225,4 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .row { grid-template-columns: 1fr; }
   .cat-grid { grid-template-columns: repeat(2, 1fr); }
 }
+.boot-hint { max-width: 420px; overflow-wrap: anywhere; }

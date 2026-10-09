@@ -32,12 +32,15 @@ Use the switcher in the top-right to act as a different demo user. Each user see
 3. Variables:
    - `DB_PATH=/data/knot.db`
    - `ANTHROPIC_API_KEY=...` (for live translation; without it, text shows untranslated)
-   - `CORS_ORIGIN=https://<your-app>.vercel.app` (optional; unset allows any origin)
-4. Generate a public domain under Settings → Networking. Railway sets `PORT` automatically. Demo data seeds on first boot.
+   - `CORS_ORIGIN=https://<your-app>.vercel.app,https://<your-app>-*.vercel.app` (optional; unset allows any origin. Include the wildcard so Vercel preview URLs work)
+4. Settings → Networking → Generate Domain. **Leave the port empty or use the one Railway shows in the deploy logs** (`KNOT API listening on …:<port>`). A mismatched port gives a 502, which the browser reports as a failed fetch.
+5. Check `https://<your-backend>.up.railway.app/health` returns `{"ok":true}`. Demo data seeds on first boot.
 
 ### Frontend → Vercel
 1. Import the repo → set **Root Directory** to `frontend` (framework: Vite, auto-detected).
 2. Environment variable: `VITE_API_URL=https://<your-backend>.up.railway.app`
-3. Deploy. Routing is hash-based, so no rewrites are needed.
+3. **Redeploy after setting or changing it.** Vite bakes the value in at build time. Routing is hash-based, so no rewrites are needed.
+
+If the app can't reach the API, the start screen says why (missing `VITE_API_URL`, unreachable host or CORS, or a URL that isn't the KNOT API) and shows the exact URL it tried.
 
 See `backend/README.md` for the full API reference.

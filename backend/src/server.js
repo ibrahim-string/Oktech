@@ -13,8 +13,7 @@ if (process.env.AUTO_SEED !== "0" && db.prepare("SELECT COUNT(*) AS n FROM users
 }
 
 const app = express();
-// CORS_ORIGIN: comma-separated allowed origins (e.g. your Vercel URL). Unset = allow all.
-app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? true }));
+app.use(cors({ origin: corsOrigin(process.env.CORS_ORIGIN) }));
 app.use(express.json({ limit: "100kb" }));
 app.use(loadUser);
 
@@ -39,6 +38,23 @@ app.use((err, _req, res, _next) => {
   if (status >= 500) console.error(err);
   res.status(status).json({ error: status >= 500 ? "Internal server error" : err.message });
 });
+
+/**
+ * CORS_ORIGIN: comma-separated origins, e.g. "https://knot.vercel.app,https://*.vercel.app".
+ * "*" wildcards and trailing slashes are allowed. Unset or "*" = allow every origin.
+ */
+function corsOrigin(value) {
+  const entries = (value ?? "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
+  if (!entries.length || entries.includes("*")) return true;
+  const patterns = entries.map(
+    (o) => new RegExp("^" + o.split("*").map(escapeRegExp).join("[^/]*") + "$", "i"),
+  );
+  return (origin, cb) => cb(null, !origin || patterns.some((p) => p.test(origin)));
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 const port = Number(process.env.PORT ?? 3001);
 app.listen(port, () => console.log(`KNOT API listening on http://localhost:${port}`));

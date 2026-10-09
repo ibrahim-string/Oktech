@@ -14,6 +14,7 @@ export function Feed() {
   useEffect(() => {
     let live = true;
     setItems(null);
+    setError(null);
     api
       .feed({ area, category, lang: contentLang })
       .then((data) => live && setItems(data))

@@ -39,20 +39,20 @@ export const navigate = (path) => {
 };
 
 export default function App() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(null);
   const [userId, setUserId] = useState(readStoredUser);
-  const [error, setError] = useState(null);
+  const [bootError, setBootError] = useState(null);
   const route = useRoute();
 
-  const reloadUsers = useCallback(
-    () => api.users().then(setUsers).catch((e) => setError(e.message)),
-    [],
-  );
-  useEffect(() => {
-    reloadUsers();
+  // Later reloads (e.g. after saving a profile) let the caller handle errors.
+  const reloadUsers = useCallback(() => api.users().then(setUsers), []);
+  const boot = useCallback(() => {
+    setBootError(null);
+    reloadUsers().catch(setBootError);
   }, [reloadUsers]);
+  useEffect(boot, [boot]);
 
-  const user = users.find((u) => u.id === userId) ?? users[0] ?? null;
+  const user = users?.find((u) => u.id === userId) ?? users?.[0] ?? null;
   setApiUser(user?.id ?? null);
 
   const switchUser = (id) => {
@@ -70,11 +70,21 @@ export default function App() {
     [user, users, lang, reloadUsers],
   );
 
-  if (error) {
+  if (bootError) {
     return (
       <div className="boot">
         <Logo />
-        <p className="muted">Can't reach the KNOT API: {error}</p>
+        <p className="error">{bootError.message}</p>
+        {bootError.hint && <p className="muted small boot-hint">{bootError.hint}</p>}
+        <button className="btn" onClick={boot}>Try again</button>
+      </div>
+    );
+  }
+  if (!users) {
+    return (
+      <div className="boot">
+        <Logo />
+        <p className="muted">Loading…</p>
       </div>
     );
   }
@@ -82,7 +92,9 @@ export default function App() {
     return (
       <div className="boot">
         <Logo />
-        <p className="muted">Loading…</p>
+        <p className="muted small boot-hint">
+          The API is reachable but has no users yet. Run <code>npm run seed</code> in the backend, or restart it with AUTO_SEED enabled.
+        </p>
       </div>
     );
   }
