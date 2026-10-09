@@ -2,15 +2,15 @@
 
 REST API for KNOT: bilingual hangouts for foreign residents and local Japanese people in Kansai.
 
-**Stack:** Node 22.13+ (tested on 24), Express 5, built-in `node:sqlite` (no DB server, no native build), Claude API for translation.
+**Stack:** Node 22.10+ (tested on 24), Express 5, Postgres via `pg` (Supabase), Claude API for translation.
 
 ## Run
 
 ```bash
-cp .env.example .env      # add ANTHROPIC_API_KEY for live translation
+cp .env.example .env      # set DATABASE_URL; add ANTHROPIC_API_KEY for live translation
 npm install
-npm run seed              # resets DB and loads the demo scenario
-npm run dev               # http://localhost:3001
+npm run dev               # http://localhost:3001 — creates tables, seeds demo data if empty
+npm run seed              # reset KNOT's tables to the demo scenario
 ```
 
 Without an API key everything still works. Seeded posts have hand-written JA/EN translations, and new text is returned untranslated (`translated: false`).
@@ -44,8 +44,12 @@ Display language is resolved in this order: `?lang=`, then the user's `preferred
 
 ## Translation
 
-`src/translate.js` calls Claude (`claude-opus-5-5` at low effort, override with `TRANSLATION_MODEL`) and caches results in SQLite by text hash and target language. New posts and messages are pre-translated in the background, so reads are usually cache hits. Any failure falls back to the original text and never returns an error.
+`src/translate.js` calls Claude (`claude-opus-5-5` at low effort, override with `TRANSLATION_MODEL`) and caches results in Postgres by text hash and target language. New posts and messages are pre-translated in the background, so reads are usually cache hits. Any failure falls back to the original text and never returns an error.
 
 ## Before a real launch
 
-Real auth, reporting and blocking, profile visibility controls, meetup-safety guidance, rate limiting, and Postgres instead of SQLite.
+Real auth (e.g. Supabase Auth), reporting and blocking, profile visibility controls, meetup-safety guidance, rate limiting, and a least-privilege database role instead of `postgres`.
+
+## Database notes
+
+Tables are created on boot (`src/db.js`, `CREATE TABLE IF NOT EXISTS`). Row Level Security is enabled with no policies, so Supabase's public Data API (anon key) can't read or write them; only this server, connecting as `postgres`, can. `npm run seed` truncates KNOT's five tables only.

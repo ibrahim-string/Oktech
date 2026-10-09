@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
-import { db } from "./db.js";
+import { one, query } from "./db.js";
 
 const MODEL = process.env.TRANSLATION_MODEL ?? "claude-opus-5-5";
 const DISABLED = process.env.TRANSLATION_DISABLED === "1";
@@ -34,14 +34,17 @@ function getClient() {
   return client;
 }
 
-const selectCached = db.prepare(
-  "SELECT translated FROM translations WHERE source_hash = ? AND target_lang = ?",
-);
-const insertCached = db.prepare(
-  "INSERT OR REPLACE INTO translations (source_hash, target_lang, translated) VALUES (?, ?, ?)",
-);
+const selectCached = (hash, lang) =>
+  one("SELECT translated FROM translations WHERE source_hash = $1 AND target_lang = $2", [hash, lang]);
 
-const hash = (text) => createHash("sha256").update(text).digest("hex");
+export const cacheTranslation = (hash, lang, text) =>
+  query(
+    `INSERT INTO translations (source_hash, target_lang, translated) VALUES ($1, $2, $3)
+     ON CONFLICT (source_hash, target_lang) DO UPDATE SET translated = EXCLUDED.translated`,
+    [hash, lang, text],
+  );
+
+export const hash = (text) => createHash("sha256").update(text).digest("hex");
 const inflight = new Map();
 
 export const isSupportedLang = (lang) => lang in LANGUAGE_NAMES;
@@ -58,7 +61,7 @@ export async function translate(text, targetLang) {
   }
 
   const key = hash(text);
-  const cached = selectCached.get(key, targetLang);
+  const cached = await selectCached(key, targetLang);
   if (cached) return { text: cached.translated, translated: true };
   if (DISABLED) return { text, translated: false };
 
@@ -70,7 +73,7 @@ export async function translate(text, targetLang) {
     );
   }
   const result = await inflight.get(inflightKey);
-  if (result.translated) insertCached.run(key, targetLang, result.text);
+  if (result.translated) await cacheTranslation(key, targetLang, result.text);
   return result;
 }
 
@@ -123,4 +126,13 @@ export async function translateFields(fields, targetLang) {
     Object.entries(fields).map(async ([k, v]) => [k, await translate(v, targetLang)]),
   );
   return Object.fromEntries(entries);
+}
+
+/** Pre-translate in the background so later reads are cache hits. Never rejects. */
+export function warm(texts, langs) {
+  for (const text of texts) {
+    for (const lang of langs) {
+      translate(text, lang).catch((err) => console.warn("[translate] warm failed:", err.message));
+    }
+  }
 }

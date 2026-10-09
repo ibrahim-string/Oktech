@@ -1,15 +1,17 @@
 import express from "express";
 import cors from "cors";
-import { db } from "./db.js";
+import { migrate, one } from "./db.js";
+import { seed } from "./seed.js";
 import { loadUser } from "./auth.js";
 import { HttpError, requireFields } from "./http.js";
 import { users } from "./routes/users.js";
 import { hangouts, CATEGORIES } from "./routes/hangouts.js";
 import { translate, isSupportedLang, supportedLanguages } from "./translate.js";
 
-// Fresh deploys (e.g. a new Railway volume) start with the demo data.
-if (process.env.AUTO_SEED !== "0" && db.prepare("SELECT COUNT(*) AS n FROM users").get().n === 0) {
-  await import("./seed.js");
+// Create tables on boot; a fresh database starts with the demo data.
+await migrate();
+if (process.env.AUTO_SEED !== "0" && (await one("SELECT count(*)::int AS n FROM users")).n === 0) {
+  await seed();
 }
 
 const app = express();

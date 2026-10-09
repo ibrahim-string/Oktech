@@ -1,15 +1,13 @@
-import { db, parseRow } from "./db.js";
+import { one } from "./db.js";
 import { HttpError } from "./http.js";
-
-const selectUser = db.prepare("SELECT * FROM users WHERE id = ?");
 
 /**
  * Hackathon auth: the client sends `X-User-Id: <id>` to act as that user.
- * Replace with real auth (e.g. sessions or JWT) before any real launch.
+ * Replace with real auth (e.g. Supabase Auth or JWT) before any real launch.
  */
-export function loadUser(req, _res, next) {
+export async function loadUser(req, _res, next) {
   const id = Number(req.get("x-user-id"));
-  req.user = Number.isInteger(id) && id > 0 ? parseRow(selectUser.get(id)) : null;
+  req.user = Number.isInteger(id) && id > 0 ? await one("SELECT * FROM users WHERE id = $1", [id]) : null;
   next();
 }
 

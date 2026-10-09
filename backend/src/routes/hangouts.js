@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { db, parseRow } from "../db.js";
+import { one, query, withTransaction } from "../db.js";
 import { requireUser, viewerLang } from "../auth.js";
 import { HttpError, requireFields, asStringArray } from "../http.js";
-import { translate, translateFields, isSupportedLang } from "../translate.js";
+import { translate, translateFields, isSupportedLang, warm } from "../translate.js";
 
 export const hangouts = Router();
 
@@ -17,21 +17,16 @@ export const CATEGORIES = [
   "other",
 ];
 
-const selectHangout = db.prepare("SELECT * FROM hangouts WHERE id = ?");
-const selectUser = db.prepare("SELECT * FROM users WHERE id = ?");
-const selectParticipants = db.prepare(
-  `SELECT u.*, p.joined_at FROM hangout_participants p
-   JOIN users u ON u.id = p.user_id WHERE p.hangout_id = ? ORDER BY p.joined_at`,
-);
-const countParticipants = db.prepare(
-  "SELECT COUNT(*) AS n FROM hangout_participants WHERE hangout_id = ?",
-);
-const isParticipant = db.prepare(
-  "SELECT 1 FROM hangout_participants WHERE hangout_id = ? AND user_id = ?",
-);
-const insertParticipant = db.prepare(
-  "INSERT OR IGNORE INTO hangout_participants (hangout_id, user_id) VALUES (?, ?)",
-);
+/**
+ * Hangouts with their host, participant count and whether the viewer ($1) has joined,
+ * in one round trip. Callers append WHERE/ORDER clauses using params from $2.
+ */
+const HANGOUT_SELECT = `
+  SELECT h.*,
+         to_jsonb(u) AS host,
+         (SELECT count(*)::int FROM hangout_participants p WHERE p.hangout_id = h.id) AS participant_count,
+         EXISTS (SELECT 1 FROM hangout_participants p WHERE p.hangout_id = h.id AND p.user_id = $1) AS joined
+  FROM hangouts h JOIN users u ON u.id = h.host_id`;
 
 const publicProfile = ({ id, name, bio, area, is_local, speaks, learning, interests }) => ({
   id, name, bio, area, is_local, speaks, learning, interests,
@@ -57,20 +52,27 @@ function sharedInterests(people) {
   return [...counts].filter(([, n]) => n >= 2).map(([tag]) => tag);
 }
 
-function getHangoutOr404(id) {
-  const h = parseRow(selectHangout.get(Number(id)));
+const parseId = (raw) => {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(404, "Hangout not found");
+  return id;
+};
+
+async function getHangout(id, req) {
+  const h = await one(`${HANGOUT_SELECT} WHERE h.id = $2`, [req.user?.id ?? null, parseId(id)]);
   if (!h) throw new HttpError(404, "Hangout not found");
   return h;
 }
 
+const isParticipant = async (hangoutId, userId) =>
+  Boolean(await one("SELECT 1 FROM hangout_participants WHERE hangout_id = $1 AND user_id = $2", [hangoutId, userId]));
+
 async function present(h, req) {
   const lang = viewerLang(req);
-  const host = parseRow(selectUser.get(h.host_id));
   const { title, description } = await translateFields(
     { title: h.title, description: h.description },
     lang,
   );
-  const joined = countParticipants.get(h.id).n;
   return {
     ...h,
     display_lang: lang,
@@ -78,37 +80,39 @@ async function present(h, req) {
     description: description.text,
     original: { title: h.title, description: h.description },
     translated: title.translated || description.translated,
-    host: publicProfile(host),
-    participant_count: joined,
-    spots_left: Math.max(0, h.max_participants - joined),
-    joined: req.user ? Boolean(isParticipant.get(h.id, req.user.id)) : false,
-    language_match: languageMatch(req.user, host),
+    host: publicProfile(h.host),
+    spots_left: Math.max(0, h.max_participants - h.participant_count),
+    language_match: languageMatch(req.user, h.host),
   };
 }
 
 // GET /hangouts?area=Kobe&category=coffee&lang=ja&include_past=1
 hangouts.get("/", async (req, res) => {
-  const where = ["status = 'open'"];
-  const params = [];
-  if (!req.query.include_past) where.push("starts_at >= datetime('now')");
+  const params = [req.user?.id ?? null];
+  const where = ["h.status = 'open'"];
+  if (!req.query.include_past) where.push("h.starts_at >= now()");
   if (req.query.area) {
-    where.push("area = ? COLLATE NOCASE");
     params.push(req.query.area);
+    where.push(`lower(h.area) = lower($${params.length})`);
   }
   if (req.query.category) {
-    where.push("category = ?");
     params.push(req.query.category);
+    where.push(`h.category = $${params.length}`);
   }
-  const rows = db
-    .prepare(`SELECT * FROM hangouts WHERE ${where.join(" AND ")} ORDER BY starts_at LIMIT 50`)
-    .all(...params)
-    .map(parseRow);
+  const rows = await query(
+    `${HANGOUT_SELECT} WHERE ${where.join(" AND ")} ORDER BY h.starts_at LIMIT 50`,
+    params,
+  );
   res.json(await Promise.all(rows.map((h) => present(h, req))));
 });
 
 hangouts.get("/:id", async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
-  const people = selectParticipants.all(h.id).map(parseRow);
+  const h = await getHangout(req.params.id, req);
+  const people = await query(
+    `SELECT u.*, p.joined_at FROM hangout_participants p
+     JOIN users u ON u.id = p.user_id WHERE p.hangout_id = $1 ORDER BY p.joined_at`,
+    [h.id],
+  );
   res.json({
     ...(await present(h, req)),
     participants: people.map((p) => ({ ...publicProfile(p), joined_at: p.joined_at })),
@@ -132,72 +136,69 @@ hangouts.post("/", requireUser, async (req, res) => {
     throw new HttpError(400, "max_participants must be an integer from 2 to 20");
   }
 
-  const { lastInsertRowid } = db
-    .prepare(
+  const id = await withTransaction(async (client) => {
+    const { rows } = await client.query(
       `INSERT INTO hangouts (host_id, title, description, category, languages, area, place_name, starts_at, max_participants)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      req.user.id,
-      b.title,
-      b.description ?? "",
-      category,
-      JSON.stringify(languages),
-      b.area,
-      b.place_name,
-      new Date(b.starts_at).toISOString(),
-      max,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [req.user.id, b.title, b.description ?? "", category, JSON.stringify(languages), b.area,
+        b.place_name, new Date(b.starts_at).toISOString(), max],
     );
-  insertParticipant.run(lastInsertRowid, req.user.id);
+    await client.query("INSERT INTO hangout_participants (hangout_id, user_id) VALUES ($1, $2)", [rows[0].id, req.user.id]);
+    return rows[0].id;
+  });
 
-  const h = parseRow(selectHangout.get(lastInsertRowid));
   // Warm the translation cache for the meetup's languages so the feed is instant.
-  for (const lang of languages) translateFields({ title: h.title, description: h.description }, lang);
-  res.status(201).json(await present(h, req));
+  warm([b.title, b.description ?? ""], languages);
+  res.status(201).json(await present(await getHangout(id, req), req));
 });
 
 hangouts.post("/:id/join", requireUser, async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
+  const h = await getHangout(req.params.id, req);
   if (h.status !== "open") throw new HttpError(409, "This hangout is not open");
-  if (!isParticipant.get(h.id, req.user.id)) {
-    if (countParticipants.get(h.id).n >= h.max_participants) {
-      throw new HttpError(409, "This hangout is full");
-    }
-    insertParticipant.run(h.id, req.user.id);
+  if (!h.joined) {
+    await withTransaction(async (client) => {
+      // Lock the hangout row so two people can't both take the last spot.
+      await client.query("SELECT 1 FROM hangouts WHERE id = $1 FOR UPDATE", [h.id]);
+      const { rows } = await client.query(
+        "SELECT count(*)::int AS n FROM hangout_participants WHERE hangout_id = $1",
+        [h.id],
+      );
+      if (rows[0].n >= h.max_participants) throw new HttpError(409, "This hangout is full");
+      await client.query(
+        "INSERT INTO hangout_participants (hangout_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [h.id, req.user.id],
+      );
+    });
   }
-  res.json(await present(h, req));
+  res.json(await present(await getHangout(h.id, req), req));
 });
 
 hangouts.delete("/:id/join", requireUser, async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
+  const h = await getHangout(req.params.id, req);
   if (h.host_id === req.user.id) throw new HttpError(409, "The host can't leave; cancel instead");
-  db.prepare("DELETE FROM hangout_participants WHERE hangout_id = ? AND user_id = ?").run(
-    h.id,
-    req.user.id,
-  );
-  res.json(await present(h, req));
+  await query("DELETE FROM hangout_participants WHERE hangout_id = $1 AND user_id = $2", [h.id, req.user.id]);
+  res.json(await present(await getHangout(h.id, req), req));
 });
 
 hangouts.post("/:id/cancel", requireUser, async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
+  const h = await getHangout(req.params.id, req);
   if (h.host_id !== req.user.id) throw new HttpError(403, "Only the host can cancel");
-  db.prepare("UPDATE hangouts SET status = 'cancelled' WHERE id = ?").run(h.id);
-  res.json(await present(getHangoutOr404(h.id), req));
+  await query("UPDATE hangouts SET status = 'cancelled' WHERE id = $1", [h.id]);
+  res.json(await present(await getHangout(h.id, req), req));
 });
 
 // --- Messages (small group chat per hangout, translated per viewer) ---
 
 hangouts.get("/:id/messages", requireUser, async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
-  if (!isParticipant.get(h.id, req.user.id)) throw new HttpError(403, "Join the hangout first");
+  const id = parseId(req.params.id);
+  if (!(await isParticipant(id, req.user.id))) throw new HttpError(403, "Join the hangout first");
   const lang = viewerLang(req);
-  const after = Number(req.query.after ?? 0);
-  const rows = db
-    .prepare(
-      `SELECT m.*, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id
-       WHERE m.hangout_id = ? AND m.id > ? ORDER BY m.id LIMIT 200`,
-    )
-    .all(h.id, after);
+  const after = Number(req.query.after) || 0;
+  const rows = await query(
+    `SELECT m.*, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id
+     WHERE m.hangout_id = $1 AND m.id > $2 ORDER BY m.id LIMIT 200`,
+    [id, after],
+  );
   res.json(
     await Promise.all(
       rows.map(async (m) => {
@@ -210,24 +211,23 @@ hangouts.get("/:id/messages", requireUser, async (req, res) => {
 });
 
 hangouts.post("/:id/messages", requireUser, async (req, res) => {
-  const h = getHangoutOr404(req.params.id);
-  if (!isParticipant.get(h.id, req.user.id)) throw new HttpError(403, "Join the hangout first");
+  const id = parseId(req.params.id);
+  if (!(await isParticipant(id, req.user.id))) throw new HttpError(403, "Join the hangout first");
   requireFields(req.body, ["body"]);
   const body = String(req.body.body).trim().slice(0, 2000);
-  const { lastInsertRowid } = db
-    .prepare("INSERT INTO messages (hangout_id, sender_id, body) VALUES (?, ?, ?)")
-    .run(h.id, req.user.id, body);
+  if (!body) throw new HttpError(400, "Message is empty");
+  const m = await one(
+    "INSERT INTO messages (hangout_id, sender_id, body) VALUES ($1, $2, $3) RETURNING *",
+    [id, req.user.id, body],
+  );
 
   // Pre-translate for the other participants' languages so their next fetch is instant.
-  const langs = new Set(
-    selectParticipants
-      .all(h.id)
-      .map(parseRow)
-      .filter((p) => p.id !== req.user.id)
-      .map((p) => p.preferred_lang),
+  const langs = await query(
+    `SELECT DISTINCT u.preferred_lang FROM hangout_participants p JOIN users u ON u.id = p.user_id
+     WHERE p.hangout_id = $1 AND p.user_id <> $2`,
+    [id, req.user.id],
   );
-  for (const lang of langs) translate(body, lang);
+  warm([body], langs.map((r) => r.preferred_lang));
 
-  const m = db.prepare("SELECT * FROM messages WHERE id = ?").get(lastInsertRowid);
   res.status(201).json({ ...m, sender_name: req.user.name });
 });

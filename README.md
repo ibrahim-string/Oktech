@@ -3,14 +3,15 @@
 **Making local connections across cultures.** KNOT helps foreign residents and local Japanese people in Kansai meet, hang out, exchange languages, and build real friendships. Built for the Kansai Bridge hackathon.
 
 ```
-backend/   Express 5 + node:sqlite REST API, Claude-powered JA⇄EN translation  → Railway
+backend/   Express 5 + Postgres (Supabase) REST API, Claude-powered JA⇄EN translation → Railway
 frontend/  React + Vite mobile-first web app, bilingual UI                     → Vercel
 ```
 
 ## Run locally
 
 ```bash
-cd backend && npm install && cp .env.example .env && npm run dev   # :3001, seeds demo data on first boot
+cd backend && npm install && cp .env.example .env   # then set DATABASE_URL (Supabase)
+npm run dev                                          # :3001, creates tables + seeds demo data on first boot
 cd frontend && npm install && npm run dev                          # :5173, proxies /api to :3001
 ```
 
@@ -28,9 +29,9 @@ Use the switcher in the top-right to act as a different demo user. Each user see
 
 ### Backend → Railway
 1. New project → Deploy from GitHub repo. The repo root deploys the backend as-is: the root `package.json` is an npm workspace that runs `backend/`, and `railway.json` sets the start command and health check. Setting **Root Directory** to `backend` also works.
-2. Add a **Volume** mounted at `/data`, so the SQLite DB survives redeploys.
+2. No volume needed: data lives in Supabase.
 3. Variables:
-   - `DB_PATH=/data/knot.db`
+   - `DATABASE_URL=` Supabase **Session pooler** connection string (Project Settings → Database → Connect). The direct `db.<ref>.supabase.co` host is IPv6-only and may not be reachable from Railway.
    - `ANTHROPIC_API_KEY=...` (for live translation; without it, text shows untranslated)
    - `CORS_ORIGIN=https://<your-app>.vercel.app,https://<your-app>-*.vercel.app` (optional; unset allows any origin. Include the wildcard so Vercel preview URLs work)
 4. Settings → Networking → Generate Domain. **Leave the port empty or use the one Railway shows in the deploy logs** (`KNOT API listening on …:<port>`). A mismatched port gives a 502, which the browser reports as a failed fetch.
