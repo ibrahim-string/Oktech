@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">KNOT civic-punk logo</title>
+  <desc id="desc">A bright lime interwoven K mark followed by the word KNOT in a heavy black display face.</desc>
+  <rect width="1200" height="360" fill="#F4F0E8"/>
+  <!-- Mark: two routes meet, cross, and continue together. -->
+  <g transform="translate(72 72)" stroke="#11120F" stroke-width="26" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M18 18H84L166 100V166"/>
+    <path d="M18 166H84L166 84V18"/>
+  </g>
+  <g transform="translate(72 72)" stroke="#D7FF19" stroke-width="18" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M18 18H84L166 100V166"/>
+    <path d="M18 166H84L166 84V18"/>
+  </g>
+  <!-- The small dark interruption makes the crossing read as a woven knot. -->
+  <path d="M145 148L183 110" stroke="#11120F" stroke-width="28" stroke-linecap="butt"/>
+  <path d="M145 148L183 110" stroke="#D7FF19" stroke-width="18" stroke-linecap="butt"/>
+  <g fill="#11120F">
+    <!-- K -->
+    <path d="M310 70H347V145L411 70H456L385 151L463 250H416L347 164V250H310V70Z"/>
+    <!-- N -->
+    <path d="M482 70H518L595 184V70H632V250H596L519 137V250H482V70Z"/>
+    <!-- O: an open, looped form rather than a perfect corporate circle -->
+    <path fill-rule="evenodd" d="M748 63C805 63 846 99 846 160C846 221 805 257 748 257C691 257 650 221 650 160C650 99 691 63 748 63ZM748 101C714 101 692 123 692 160C692 197 714 219 748 219C782 219 804 197 804 160C804 123 782 101 748 101Z"/>
+    <!-- T -->
+    <path d="M859 70H1020V108H959V250H920V108H859V70Z"/>
+  </g>
+  <g fill="#11120F" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="5">
+    <text x="313" y="293">K A N S A I &nbsp; A C T I O N &nbsp; N E T W O R K</text>
+  </g>
+</svg>
