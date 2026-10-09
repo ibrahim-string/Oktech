@@ -1,3 +1,5 @@
+import { activateDemoMode, demoApi, isDemoMode } from "./demoApi.js";
+
 /**
  * Resolve the backend base URL.
  * - Dev: unset → "/api" (proxied to localhost:3001 by vite.config.js).
@@ -84,7 +86,7 @@ async function request(path, { method = "GET", body, query, headers = {} } = {})
   return data;
 }
 
-export const api = {
+const liveApi = {
   meta: () => request("/meta"),
   startSession: (body) => request("/session", { method: "POST", body }),
   randomName: () => request("/random-name"),
@@ -120,3 +122,29 @@ export const api = {
   createAlert: (body, adminToken) => request("/safety/alerts", { method: "POST", body, headers: { "X-Admin-Token": adminToken } }),
   endAlert: (id, adminToken) => request(`/safety/alerts/${id}`, { method: "DELETE", headers: { "X-Admin-Token": adminToken } }),
 };
+
+/**
+ * A missing local backend should not stop a design review. In development only,
+ * starting a session falls back to browser-only presentation data after an API
+ * failure. A live API always wins whenever it is available.
+ */
+const canFallBackToDemo = import.meta.env.DEV && import.meta.env.VITE_DEMO_FALLBACK !== "false";
+const isConnectionFailure = (error) => error instanceof ApiError && (!error.status || error.status === 502 || error.status === 503);
+
+export const api = new Proxy(liveApi, {
+  get(target, property, receiver) {
+    if (property === "startSession" && !isDemoMode()) {
+      return async (...args) => {
+        try {
+          return await target.startSession(...args);
+        } catch (error) {
+          if (!canFallBackToDemo || !isConnectionFailure(error)) throw error;
+          activateDemoMode();
+          return demoApi.startSession(...args);
+        }
+      };
+    }
+    const source = isDemoMode() ? demoApi : target;
+    return Reflect.get(source, property, receiver);
+  },
+});
