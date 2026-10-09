@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;700&family=Geist+Mono:wght@400;500&family=Noto+Serif+JP:wght@500&display=swap");
+
 :root {
   --indigo: #1f2a5c;
   --vermilion: #f26b4f;
@@ -260,13 +262,91 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .seg .ok.on { border-color: var(--ok); background: var(--ok-bg); }
 .seg .sos.on { border-color: var(--danger); background: var(--danger-bg); }
 
-/* Onboarding */
-.onboarding { max-width: 560px; margin: 0 auto; padding: 24px 16px 40px; display: grid; gap: 18px; }
-.ob-hero { display: grid; gap: 10px; padding: 8px 4px; }
-.ob-hero h1 { font-size: 1.9rem; }
-.ob-hero p { color: var(--muted); }
-.name-row { display: flex; gap: 8px; }
-.name-row input { flex: 1; min-width: 0; }
+/* Onboarding: dark in both themes, one accent, hairlines, mono labels */
+body:has(.ob) { background: #121212; }
+.ob {
+  --ob-bg: #121212;
+  --ob-ink: #ededed;
+  --ob-dim: #bdbdbd;
+  --ob-muted: #8a8a8a;
+  --ob-faint: #5e5e5e;
+  --ob-line: #333;
+  --ob-rule: #262626;
+  --ob-accent: #ff5533;
+  --ob-mono: "Geist Mono", ui-monospace, monospace;
+  --ob-serif: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  max-width: 560px; margin: 0 auto; padding: 0 16px 40px;
+  min-height: 100vh; background: var(--ob-bg); color: var(--ob-ink);
+  font-family: "Geist", "Noto Sans JP", system-ui, sans-serif;
+  color-scheme: dark;
+}
+:where(.ob) button { background: none; border: 0; padding: 0; cursor: pointer; }
+.ob button:focus-visible, .ob-select:has(select:focus-visible) { outline: 2px solid var(--ob-accent); outline-offset: 2px; }
+
+.ob-bar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: calc(14px + env(safe-area-inset-top)) 0 14px;
+  background: var(--ob-bg); border-bottom: 1px solid var(--ob-rule);
+}
+.ob-logo { font-weight: 700; font-size: 15px; letter-spacing: 0.22em; }
+.ob-musubi { font-family: var(--ob-serif); color: var(--ob-accent); letter-spacing: 0; }
+.ob-count, .ob-eyebrow { font-family: var(--ob-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ob-muted); }
+.ob-count b { color: var(--ob-ink); font-weight: 500; }
+
+.ob-hero { display: grid; gap: 10px; padding: 28px 0 10px; }
+.ob-title { font-family: inherit; font-size: clamp(30px, 8.5vw, 40px); font-weight: 700; line-height: 1.04; letter-spacing: -0.045em; }
+.ob:lang(ja) .ob-title { line-height: 1.3; letter-spacing: -0.01em; }
+.ob-title em { font-style: normal; color: var(--ob-accent); }
+.ob-alt { font-size: 13px; color: var(--ob-muted); }
+.ob-alt:lang(ja) { font-family: var(--ob-serif); }
+.ob-sub { font-size: 14px; line-height: 1.55; color: #9a9a9a; max-width: 40ch; }
+
+.ob-step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 18px 0 4px; }
+.ob-n { font-family: var(--ob-mono); font-size: 11px; line-height: 1.9; color: var(--ob-faint); border-left: 1px solid var(--ob-line); padding-left: 7px; transition: color 0.15s, border-color 0.15s; }
+.ob-step.on .ob-n { color: var(--ob-accent); border-left: 2px solid var(--ob-accent); padding-left: 6px; }
+.ob-q { display: block; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1.4; letter-spacing: -0.01em; margin: 0 0 10px; }
+.ob-meta { font-family: var(--ob-mono); font-size: 11px; color: var(--ob-muted); }
+
+.ob-seg { display: flex; border: 1px solid var(--ob-line); border-radius: 4px; overflow: hidden; }
+.ob-seg > * { flex: 1; min-width: 0; padding: 9px 6px; font-size: 13px; text-align: center; color: var(--ob-dim); border-right: 1px solid var(--ob-line); }
+.ob-seg > :last-child { border-right: 0; }
+.ob-select { position: relative; display: grid; place-items: center; }
+.ob-select > span::after { content: " ▾"; font-size: 11px; }
+.ob-select select { position: absolute; inset: 0; opacity: 0; width: 100%; padding: 0; font-size: 16px; cursor: pointer; }
+
+.ob-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ob-opt { display: grid; gap: 4px; align-content: start; text-align: left; padding: 11px 12px; border: 1px solid var(--ob-line); border-radius: 14px 14px 14px 0; color: var(--ob-dim); transition: border-color 0.15s, color 0.15s; }
+.ob-opt b { font-size: 14px; font-weight: 500; line-height: 1.3; }
+.ob-opt.on { border-color: var(--ob-ink); color: var(--ob-ink); }
+
+.ob-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ob-tag { padding: 5px 9px; font-size: 13px; color: var(--ob-dim); border: 1px solid var(--ob-line); border-radius: 4px; transition: border-color 0.15s; }
+.ob-areas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ob-area { display: grid; gap: 2px; justify-items: start; padding: 8px 10px; border: 1px solid var(--ob-line); border-radius: 4px; }
+.ob-kanji { font-family: var(--ob-serif); font-size: 17px; line-height: 1.3; }
+.ob-tag:not(.on):hover, .ob-area:not(.on):hover, .ob-opt:not(.on):hover { border-color: #555; }
+.ob-seg .on, .ob-tag.on, .ob-area.on { background: var(--ob-ink); color: var(--ob-bg); border-color: var(--ob-ink); font-weight: 500; }
+.ob-area.on .ob-meta { color: #555; }
+
+.ob-input { display: flex; align-items: center; border: 1px solid var(--ob-line); border-radius: 4px; transition: border-color 0.15s; }
+.ob-input:focus-within { border-color: var(--ob-ink); }
+.ob-input input, .ob-input input:focus { flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 0; padding: 10px 12px; }
+.ob-input button { align-self: stretch; padding: 0 12px; font-family: var(--ob-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ob-dim); }
+.ob-input button:hover { color: var(--ob-ink); }
+.ob-hint { margin-top: 8px; font-family: var(--ob-mono); font-size: 11px; line-height: 1.6; color: var(--ob-muted); }
+
+.ob .error { margin-top: 16px; color: #ff8a7a; }
+.ob-cta {
+  display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 24px;
+  padding: 14px 16px; border-radius: 4px; background: var(--ob-accent); color: var(--ob-bg);
+  font-size: 15px; font-weight: 700; transition: background 0.15s, transform 0.08s;
+}
+.ob-cta:hover { background: #ff6a4d; }
+.ob-cta:active { transform: scale(0.99); }
+.ob-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.ob-foot { display: grid; gap: 4px; margin-top: 16px; text-align: center; font-family: var(--ob-mono); font-size: 11px; line-height: 1.6; color: var(--ob-muted); }
+.ob-foot span { color: var(--ob-faint); }
 
 /* Emergency banner */
 .emergency { margin: 0 16px 12px; border-radius: var(--radius); background: var(--danger); color: #fff; padding: 12px 14px; display: grid; gap: 8px; box-shadow: var(--shadow); }
