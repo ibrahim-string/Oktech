@@ -66,7 +66,7 @@ Display language is resolved in this order: `?lang=`, then the user's `preferred
 
 ## Database notes
 
-Tables are created on boot (`src/db.js`, `CREATE TABLE IF NOT EXISTS`). Row Level Security is enabled with no policies, so Supabase's public Data API (anon key) can't read or write them; only this server, connecting as `postgres`, can.
+Tables are created on boot (`src/db.js`, `CREATE TABLE IF NOT EXISTS`) inside their own Postgres schema, `knot` by default (`DB_SCHEMA`), so KNOT can share a database with another app without touching its tables. Every connection sets `search_path` to that schema only. Row Level Security is enabled with no policies, so Supabase's public Data API (anon key) can't read or write them; only this server, connecting as `postgres`, can.
 
 ## Before a real launch
 

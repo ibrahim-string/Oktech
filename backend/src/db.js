@@ -13,7 +13,25 @@ const noTls =
   /[?&]sslmode=disable\b/.test(url) ||
   process.env.DATABASE_SSL === "false";
 
+// KNOT keeps all its tables in their own Postgres schema (default "knot"), so it can share
+// a database with another app without touching that app's tables (e.g. its own "users").
+export const DB_SCHEMA = process.env.DB_SCHEMA ?? "knot";
+if (!/^[a-z_][a-z0-9_]*$/.test(DB_SCHEMA)) {
+  console.error(`DB_SCHEMA must be a simple lowercase identifier, got "${DB_SCHEMA}".`);
+  process.exit(1);
+}
+
+/** A client whose connection resolves unqualified table names in KNOT's schema only, never in public. */
+class SchemaClient extends pg.Client {
+  connect(callback) {
+    const ready = super.connect().then(() => super.query(`SET search_path TO ${DB_SCHEMA}`)).then(() => undefined);
+    if (!callback) return ready;
+    ready.then(() => callback(null, this), (err) => callback(err));
+  }
+}
+
 export const pool = new pg.Pool({
+  Client: SchemaClient,
   connectionString: url,
   // Hosted certificate chains (Supabase, Railway) aren't in Node's default store.
   ssl: noTls ? false : { rejectUnauthorized: false },
@@ -202,9 +220,9 @@ ALTER TABLE safety_checkins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 `;
 
-/** Create tables if they don't exist. Safe to run on every boot. */
+/** Create KNOT's schema and tables if they don't exist. Safe to run on every boot. */
 export async function migrate() {
-  await pool.query(SCHEMA);
+  await pool.query(`CREATE SCHEMA IF NOT EXISTS ${DB_SCHEMA}; SET search_path TO ${DB_SCHEMA}; ${SCHEMA}`);
 }
 
 /** Run `fn(client)` in a transaction; commits on success, rolls back on error. */
