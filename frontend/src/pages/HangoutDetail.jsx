@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../App.jsx";
 import { api } from "../api.js";
 import { CATEGORY_ICONS, formatWhen, listLangs } from "../i18n.js";
 import { Avatar } from "../components/Avatar.jsx";
 import { LanguagePair, MatchChips } from "../components/HangoutCard.jsx";
+import { Chat } from "../components/Chat.jsx";
 
 export function HangoutDetail({ id }) {
   const { t, lang, user, contentLang } = useApp();
@@ -135,113 +136,17 @@ export function HangoutDetail({ id }) {
 
       <p className="safety">🛡️ {t.safety}</p>
 
-      <Chat hangoutId={h.id} enabled={h.joined || isHost} />
+      <section className="card chat">
+        <h2>💬 {t.chat}</h2>
+        {h.joined || isHost ? (
+          <Chat
+            load={(after) => api.messages(h.id, after)}
+            send={(body) => api.sendMessage(h.id, body)}
+          />
+        ) : (
+          <p className="muted">{t.chat_locked}</p>
+        )}
+      </section>
     </div>
-  );
-}
-
-function Chat({ hangoutId, enabled }) {
-  const { t, user, contentLang } = useApp();
-  const [messages, setMessages] = useState([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState(null);
-  const [original, setOriginal] = useState({});
-  const lastId = useRef(0);
-  const endRef = useRef(null);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let live = true;
-    lastId.current = 0;
-    setMessages([]);
-    const poll = async () => {
-      try {
-        const fresh = await api.messages(hangoutId, lastId.current);
-        if (!live || !fresh.length) return;
-        lastId.current = fresh[fresh.length - 1].id;
-        setMessages((prev) => {
-          const seen = new Set(prev.map((m) => m.id));
-          return [...prev, ...fresh.filter((m) => !seen.has(m.id))];
-        });
-      } catch {
-        /* keep polling; transient errors are fine in a demo */
-      }
-    };
-    poll();
-    const timer = setInterval(poll, 3000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [hangoutId, enabled, contentLang]);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages.length]);
-
-  const send = async (e) => {
-    e.preventDefault();
-    const body = draft.trim();
-    if (!body) return;
-    setSending(true);
-    setSendError(null);
-    try {
-      const m = await api.sendMessage(hangoutId, body);
-      setDraft("");
-      setMessages((prev) => [...prev, { ...m, text: m.body, translated: false }]);
-      lastId.current = Math.max(lastId.current, m.id);
-    } catch (err) {
-      setSendError(err.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <section className="card chat">
-      <h2>💬 {t.chat}</h2>
-      {!enabled ? (
-        <p className="muted">{t.chat_locked}</p>
-      ) : (
-        <>
-          <div className="messages">
-            {messages.length === 0 && <p className="muted small center">{t.no_messages}</p>}
-            {messages.map((m) => {
-              const mine = m.sender_id === user.id;
-              const showOrig = original[m.id];
-              return (
-                <div key={m.id} className={`msg ${mine ? "mine" : ""}`}>
-                  {!mine && <span className="sender">{m.sender_name}</span>}
-                  <p className="bubble">{showOrig ? m.body : m.text}</p>
-                  {m.translated && (
-                    <button
-                      className="link-btn tiny"
-                      onClick={() => setOriginal((o) => ({ ...o, [m.id]: !o[m.id] }))}
-                    >
-                      ✨ {showOrig ? t.show_translation : `${t.ai_translated} · ${t.show_original}`}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            <div ref={endRef} />
-          </div>
-          <form className="composer" onSubmit={send}>
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={t.chat_placeholder}
-              aria-label={t.chat_placeholder}
-              maxLength={2000}
-            />
-            <button className="btn" disabled={sending || !draft.trim()}>
-              {t.send}
-            </button>
-          </form>
-          {sendError && <p className="error">{sendError}</p>}
-        </>
-      )}
-    </section>
   );
 }

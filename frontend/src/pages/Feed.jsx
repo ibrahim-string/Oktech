@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useApp } from "../App.jsx";
+import { navigate, useApp } from "../App.jsx";
 import { api } from "../api.js";
 import { AREAS, CATEGORY_ICONS } from "../i18n.js";
 import { HangoutCard } from "../components/HangoutCard.jsx";
@@ -31,6 +31,29 @@ export function Feed() {
         <h1>{t.feed_title}</h1>
         <p className="muted">{t.feed_sub}</p>
       </section>
+
+      <a href="#/meet" className="card promo">
+        <span className="promo-dice" aria-hidden>🎲</span>
+        <span>
+          <strong>{t.meet_promo_title}</strong>
+          <span className="small muted">{t.meet_promo_sub}</span>
+        </span>
+        <span aria-hidden>→</span>
+      </a>
+
+      <div className="feed-actions">
+        <button
+          className="btn ghost small"
+          onClick={() => {
+            const open = (items ?? []).filter((h) => h.spots_left > 0 && !h.joined);
+            if (!open.length) return setError(t.surprise_none);
+            navigate(`/h/${open[Math.floor(Math.random() * open.length)].id}`);
+          }}
+        >
+          🔀 {t.surprise}
+        </button>
+        <a className="btn small" href="#/new">＋ {t.new_hangout}</a>
+      </div>
 
       <div className="filters" role="group" aria-label={t.f_area}>
         <button className={`pill ${area === "" ? "on" : ""}`} onClick={() => setArea("")}>

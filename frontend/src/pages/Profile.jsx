@@ -3,11 +3,12 @@ import { useApp } from "../App.jsx";
 import { api } from "../api.js";
 import { AREAS, listLangs } from "../i18n.js";
 import { Avatar } from "../components/Avatar.jsx";
+import { ChatList } from "./Meet.jsx";
 
 const LANGS = ["ja", "en", "zh", "ko", "vi", "pt", "es", "fr", "id", "th", "tl"];
 
 export function Profile() {
-  const { t, user, reloadUsers } = useApp();
+  const { t, user, setUser } = useApp();
   const [form, setForm] = useState({
     name: user.name,
     bio: user.bio,
@@ -30,11 +31,11 @@ export function Profile() {
     e.preventDefault();
     setStatus("saving");
     try {
-      await api.updateMe({
+      const updated = await api.updateMe({
         ...form,
         interests: form.interests.split(/[,、]/).map((s) => s.trim()).filter(Boolean),
       });
-      await reloadUsers();
+      setUser(updated);
       setStatus("saved");
     } catch (err) {
       setStatus(err.message);
@@ -114,6 +115,8 @@ export function Profile() {
         {status === "saved" && <p className="ok">✓ {t.saved}</p>}
         {status && !["saving", "saved"].includes(status) && <p className="error">{status}</p>}
       </form>
+
+      <ChatList />
     </div>
   );
 }

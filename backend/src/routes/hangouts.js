@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { one, query, withTransaction } from "../db.js";
-import { requireUser, viewerLang } from "../auth.js";
+import { requireUser, viewerLang, publicProfile, languageMatch } from "../auth.js";
 import { HttpError, requireFields, asStringArray } from "../http.js";
 import { translate, translateFields, isSupportedLang, warm } from "../translate.js";
 
@@ -27,19 +27,6 @@ const HANGOUT_SELECT = `
          (SELECT count(*)::int FROM hangout_participants p WHERE p.hangout_id = h.id) AS participant_count,
          EXISTS (SELECT 1 FROM hangout_participants p WHERE p.hangout_id = h.id AND p.user_id = $1) AS joined
   FROM hangouts h JOIN users u ON u.id = h.host_id`;
-
-const publicProfile = ({ id, name, bio, area, is_local, speaks, learning, interests }) => ({
-  id, name, bio, area, is_local, speaks, learning, interests,
-});
-
-/** What the viewer and the host can do for each other, language-wise. */
-function languageMatch(viewer, host) {
-  if (!viewer || viewer.id === host.id) return null;
-  return {
-    you_can_help_with: host.learning.filter((l) => viewer.speaks.includes(l)),
-    you_can_practice: viewer.learning.filter((l) => host.speaks.includes(l)),
-  };
-}
 
 /** Interests shared by at least two participants. */
 function sharedInterests(people) {

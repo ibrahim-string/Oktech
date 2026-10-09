@@ -8,7 +8,9 @@ import { hash } from "./translate.js";
 export async function seed() {
   await withTransaction(async (c) => {
     await c.query(
-      "TRUNCATE messages, hangout_participants, hangouts, users, translations RESTART IDENTITY CASCADE",
+      `TRUNCATE messages, hangout_participants, hangouts, conversation_messages, conversation_members,
+       conversations, match_queue, blocks, reports, aid_posts, safety_checkins, alerts, users, translations
+     RESTART IDENTITY CASCADE`,
     );
 
     const user = async (name, bio, area, isLocal, pref, speaks, learning, interests) =>
@@ -107,6 +109,60 @@ export async function seed() {
           title: "伏見稲荷の朝さんぽ＋朝ごはん",
           description:
             "混む前に朝早く鳥居をくぐって歩き、そのあと近くで朝ごはんを食べましょう。英語やポルトガル語で話せます。日本語を練習したいです。",
+        },
+      },
+    });
+
+    // Mutual aid board: evergreen offers so the Help tab isn't empty.
+    const aidPost = async ({ user, kind, category, area, title, body, translations }) => {
+      await c.query(
+        "INSERT INTO aid_posts (user_id, kind, category, title, body, area) VALUES ($1, $2, $3, $4, $5, $6)",
+        [user, kind, category, title, body, area],
+      );
+      for (const [lang, t] of Object.entries(translations)) {
+        await cache(title, lang, t.title);
+        await cache(body, lang, t.body);
+      }
+    };
+    await aidPost({
+      user: yuki,
+      kind: "offer",
+      category: "interpreting",
+      area: "Kobe",
+      title: "災害時の通訳、手伝います",
+      body: "地震や台風のとき、役所や病院、避難所での日本語のやりとりを手伝います。チャットで気軽に連絡してください。",
+      translations: {
+        en: {
+          title: "I can help interpret during a disaster",
+          body: "During an earthquake or typhoon, I can help with Japanese at the city office, hospital or evacuation shelter. Feel free to message me.",
+        },
+      },
+    });
+    await aidPost({
+      user: kenta,
+      kind: "offer",
+      category: "supplies",
+      area: "Osaka",
+      title: "水とモバイルバッテリーを分けられます",
+      body: "梅田近くに住んでいます。停電や断水のときは、水と充電器を分けられます。",
+      translations: {
+        en: {
+          title: "I can share water and power banks",
+          body: "I live near Umeda. If there's a blackout or the water is cut off, I can share water and chargers.",
+        },
+      },
+    });
+    await aidPost({
+      user: emma,
+      kind: "offer",
+      category: "check_on",
+      area: "Kobe",
+      title: "Happy to check on foreign residents near Sannomiya",
+      body: "If you're new to Japan and worried during an emergency, message me. I can walk with you to the nearest shelter or help you read alerts in English.",
+      translations: {
+        ja: {
+          title: "三宮周辺の外国人住民の安否確認をします",
+          body: "日本に来たばかりで、緊急時に不安な方はメッセージをください。近くの避難所まで一緒に行ったり、英語で警報を読むのを手伝ったりできます。",
         },
       },
     });

@@ -2,10 +2,12 @@ import express from "express";
 import cors from "cors";
 import { migrate, one } from "./db.js";
 import { seed } from "./seed.js";
-import { loadUser } from "./auth.js";
+import { loadUser, requireUser } from "./auth.js";
 import { HttpError, requireFields } from "./http.js";
 import { users } from "./routes/users.js";
 import { hangouts, CATEGORIES } from "./routes/hangouts.js";
+import { conversations, match } from "./routes/conversations.js";
+import { safety, aid, AID_CATEGORIES, ALERT_KINDS } from "./routes/safety.js";
 import { translate, isSupportedLang, supportedLanguages } from "./translate.js";
 
 // Create tables on boot; a fresh database starts with the demo data.
@@ -21,14 +23,18 @@ app.use(loadUser);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/meta", (_req, res) =>
-  res.json({ languages: supportedLanguages(), categories: CATEGORIES }),
+  res.json({ languages: supportedLanguages(), categories: CATEGORIES, aid_categories: AID_CATEGORIES, alert_kinds: ALERT_KINDS }),
 );
 
-app.use("/users", users);
+app.use("/", users); // POST /session, GET/PATCH /me
 app.use("/hangouts", hangouts);
+app.use("/conversations", conversations);
+app.use("/match", match);
+app.use("/safety", safety);
+app.use("/aid", aid);
 
 // Ad-hoc translation, e.g. to preview a post in the other language before publishing.
-app.post("/translate", async (req, res) => {
+app.post("/translate", requireUser, async (req, res) => {
   requireFields(req.body, ["text", "target"]);
   if (!isSupportedLang(req.body.target)) throw new HttpError(400, "Unsupported target language");
   res.json(await translate(String(req.body.text).slice(0, 4000), req.body.target));

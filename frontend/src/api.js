@@ -22,12 +22,26 @@ export class ApiError extends Error {
   }
 }
 
-let userId = null;
-export const setApiUser = (id) => {
-  userId = id;
-};
+// Anonymous session token, kept in localStorage so the same person comes back as themselves.
+const TOKEN_KEY = "knot.token";
+let token = null;
+try {
+  token = localStorage.getItem(TOKEN_KEY);
+} catch {
+  /* storage blocked: the session lasts until the tab closes */
+}
+export const hasSession = () => Boolean(token);
+export function setToken(value) {
+  token = value;
+  try {
+    if (value) localStorage.setItem(TOKEN_KEY, value);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
-async function request(path, { method = "GET", body, query } = {}) {
+async function request(path, { method = "GET", body, query, headers = {} } = {}) {
   if (!API_BASE) {
     throw new ApiError("VITE_API_URL is not set for this build.", {
       hint: "In Vercel → Settings → Environment Variables, set VITE_API_URL to your Railway URL, then redeploy (Vite bakes it in at build time).",
@@ -44,7 +58,8 @@ async function request(path, { method = "GET", body, query } = {}) {
       method,
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
-        ...(userId ? { "X-User-Id": String(userId) } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -71,9 +86,10 @@ async function request(path, { method = "GET", body, query } = {}) {
 
 export const api = {
   meta: () => request("/meta"),
-  users: () => request("/users"),
-  createUser: (body) => request("/users", { method: "POST", body }),
-  updateMe: (body) => request("/users/me", { method: "PATCH", body }),
+  startSession: (body) => request("/session", { method: "POST", body }),
+  randomName: () => request("/random-name"),
+  me: () => request("/me"),
+  updateMe: (body) => request("/me", { method: "PATCH", body }),
   feed: (query) => request("/hangouts", { query }),
   hangout: (id) => request(`/hangouts/${id}`),
   createHangout: (body) => request("/hangouts", { method: "POST", body }),
@@ -82,4 +98,25 @@ export const api = {
   messages: (id, after) => request(`/hangouts/${id}/messages`, { query: { after } }),
   sendMessage: (id, body) => request(`/hangouts/${id}/messages`, { method: "POST", body: { body } }),
   translate: (text, target) => request("/translate", { method: "POST", body: { text, target } }),
+
+  // Random 1:1 chats
+  match: () => request("/match", { method: "POST" }),
+  cancelMatch: () => request("/match", { method: "DELETE" }),
+  conversations: () => request("/conversations"),
+  conversation: (id) => request(`/conversations/${id}`),
+  conversationMessages: (id, after) => request(`/conversations/${id}/messages`, { query: { after } }),
+  sendConversationMessage: (id, body) => request(`/conversations/${id}/messages`, { method: "POST", body: { body } }),
+  newTopic: (id) => request(`/conversations/${id}/topic`, { method: "POST" }),
+  leaveConversation: (id) => request(`/conversations/${id}/leave`, { method: "POST" }),
+  report: (id, reason) => request(`/conversations/${id}/report`, { method: "POST", body: { reason } }),
+
+  // Disaster support
+  safety: () => request("/safety"),
+  checkin: (status) => request("/safety/checkin", { method: "POST", body: { status } }),
+  aid: (query) => request("/aid", { query }),
+  createAid: (body) => request("/aid", { method: "POST", body }),
+  respondAid: (id) => request(`/aid/${id}/respond`, { method: "POST" }),
+  resolveAid: (id) => request(`/aid/${id}/resolve`, { method: "POST" }),
+  createAlert: (body, adminToken) => request("/safety/alerts", { method: "POST", body, headers: { "X-Admin-Token": adminToken } }),
+  endAlert: (id, adminToken) => request(`/safety/alerts/${id}`, { method: "DELETE", headers: { "X-Admin-Token": adminToken } }),
 };
