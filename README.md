@@ -27,7 +27,7 @@ Use the switcher in the top-right to act as a different demo user. Each user see
 ## Deploy
 
 ### Backend → Railway
-1. New project → Deploy from GitHub repo → set **Root Directory** to `backend`.
+1. New project → Deploy from GitHub repo. The repo root deploys the backend as-is: the root `package.json` is an npm workspace that runs `backend/`, and `railway.json` sets the start command and health check. Setting **Root Directory** to `backend` also works.
 2. Add a **Volume** mounted at `/data`, so the SQLite DB survives redeploys.
 3. Variables:
    - `DB_PATH=/data/knot.db`

@@ -1,0 +1,12 @@
+{
+  "name": "knot",
+  "private": true,
+  "description": "KNOT monorepo. The root package exists so Railway can deploy the backend from the repo root.",
+  "workspaces": ["backend"],
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "start": "npm start -w backend",
+    "dev": "npm run dev -w backend",
+    "seed": "npm run seed -w backend"
+  }
+}
