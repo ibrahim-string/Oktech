@@ -6,12 +6,17 @@ if (!process.env.DATABASE_URL) {
 }
 
 const url = process.env.DATABASE_URL;
-const isLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+// TLS is required by Supabase and Railway's public proxy, but not offered by local
+// Postgres or Railway's private network (*.railway.internal).
+const noTls =
+  /@(localhost|127\.0\.0\.1|[^@/]*\.railway\.internal)[:/]/.test(url) ||
+  /[?&]sslmode=disable\b/.test(url) ||
+  process.env.DATABASE_SSL === "false";
 
 export const pool = new pg.Pool({
   connectionString: url,
-  // Supabase requires TLS; its certificate chain isn't in Node's default store.
-  ssl: isLocal ? false : { rejectUnauthorized: false },
+  // Hosted certificate chains (Supabase, Railway) aren't in Node's default store.
+  ssl: noTls ? false : { rejectUnauthorized: false },
   max: Number(process.env.DB_POOL_SIZE ?? 5),
 });
 
