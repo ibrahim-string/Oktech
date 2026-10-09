@@ -11,9 +11,40 @@ import { safety, aid, AID_CATEGORIES, ALERT_KINDS } from "./routes/safety.js";
 import { translate, isSupportedLang, supportedLanguages } from "./translate.js";
 
 // Create tables on boot; a fresh database starts with the demo data.
-await migrate();
-if (process.env.AUTO_SEED !== "0" && (await one("SELECT count(*)::int AS n FROM users")).n === 0) {
-  await seed();
+try {
+  await migrate();
+  if (process.env.AUTO_SEED !== "0" && (await one("SELECT count(*)::int AS n FROM users")).n === 0) {
+    await seed();
+  }
+} catch (err) {
+  await failStartup(err);
+}
+
+/**
+ * Explain database startup failures in plain words, then exit after a pause. The pause
+ * matters: Railway restarts crashed apps immediately, and repeated bad logins make
+ * Supabase block all connections for a while (ECIRCUITBREAKER).
+ */
+async function failStartup(err) {
+  let host = "?";
+  try {
+    const u = new URL(process.env.DATABASE_URL);
+    host = `${u.username}@${u.hostname}:${u.port || 5432}`;
+  } catch {
+    /* unparsable URL; reported below */
+  }
+  const hints = {
+    "28P01": "The database rejected the password in DATABASE_URL. Reset it in Supabase (Project Settings → Database → Reset database password), put the new one in DATABASE_URL, and URL-encode special characters (e.g. @ → %40).",
+    XX000: "Supabase is temporarily blocking connections after too many failed logins. Fix DATABASE_URL, then wait a few minutes before redeploying.",
+    ENOTFOUND: "The database host in DATABASE_URL doesn't exist. Copy the connection string again from Supabase → Connect → Session pooler.",
+    ECONNREFUSED: "Nothing is accepting connections at the database host/port in DATABASE_URL.",
+    ETIMEDOUT: "Timed out reaching the database. If you used db.<ref>.supabase.co, use the Session pooler string instead (IPv4).",
+  };
+  console.error(`\n✖ Can't start: database connection failed (${host}).`);
+  console.error(`  ${err.code ?? ""} ${err.message}`);
+  console.error(`  → ${hints[err.code] ?? "Check DATABASE_URL."}\n`);
+  await new Promise((r) => setTimeout(r, 30_000));
+  process.exit(1);
 }
 
 const app = express();
