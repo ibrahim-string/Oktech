@@ -79,12 +79,20 @@ app.use((err, _req, res, _next) => {
 });
 
 /**
- * CORS_ORIGIN: comma-separated origins, e.g. "https://knot.vercel.app,https://*.vercel.app".
+ * CORS_ORIGIN: extra comma-separated origins, e.g. "https://knot.example.com,https://*.example.com".
  * "*" wildcards and trailing slashes are allowed. Unset or "*" = allow every origin.
+ * The KNOT frontends (production, Vercel previews, local dev) are always allowed.
  */
 function corsOrigin(value) {
-  const entries = (value ?? "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
-  if (!entries.length || entries.includes("*")) return true;
+  const known = [
+    "https://oktech-indol.vercel.app",
+    "https://oktech-*-ibrahim-strings-projects.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ];
+  const extra = (value ?? "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean);
+  if (!extra.length || extra.includes("*")) return true;
+  const entries = [...known, ...extra];
   const patterns = entries.map(
     (o) => new RegExp("^" + o.split("*").map(escapeRegExp).join("[^/]*") + "$", "i"),
   );
